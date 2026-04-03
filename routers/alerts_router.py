@@ -160,7 +160,7 @@ async def rule_history(
             "trigger_value": h.trigger_value,
             "message":       h.message,
             "channel":       h.channel.value,
-            "status":        h.status.value,
+            "status":        str(h.status.value if hasattr(h.status, "value") else h.status),
             "error_message": h.error_message,
         }
         for h in history

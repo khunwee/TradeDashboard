@@ -13,7 +13,7 @@ from models import (
     DailyStats, User
 )
 from auth import get_current_user
-from routers.accounts import get_account_or_404, user_can_access_account
+from routers.accounts import get_account_or_404, user_can_access_account, user_can_access
 from calculations import (
     load_closed_trades, load_daily_stats, load_equity_snapshots,
     calc_symbol_breakdown, calc_direction_analysis, calc_hourly_heatmap,
@@ -367,7 +367,7 @@ async def portfolio_summary(
                 "win_rate":       a.win_rate,
                 "sharpe_ratio":   a.sharpe_ratio,
                 "avg_daily_profit": a.avg_daily_profit,
-                "status":         a.status.value,
+                "status":         str(a.status.value if hasattr(a.status, "value") else a.status),
             }
             for a in accounts
         ],

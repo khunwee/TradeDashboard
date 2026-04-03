@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import OpenPosition, ClosedTrade, Account, User
 from auth import get_current_user
-from routers.accounts import get_account_or_404, user_can_access_account
+from routers.accounts import get_account_or_404, user_can_access_account, user_can_access
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/trades", tags=["Trades"])

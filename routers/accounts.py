@@ -745,3 +745,6 @@ async def get_daily_stats(
         }
         for s in reversed(stats)
     ]
+
+# Backward compatibility alias
+user_can_access_account = user_can_access

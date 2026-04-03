@@ -79,12 +79,11 @@ async def system_stats(
         AlertHistory.triggered_at >= day_ago
     ).scalar()
 
-    from models import AccountStatus
     live_accounts = db.query(func.count(Account.id)).filter(
-        Account.status == AccountStatus.LIVE
+        Account.status == "live"
     ).scalar()
     disconnected_accounts = db.query(func.count(Account.id)).filter(
-        Account.status == AccountStatus.DISCONNECTED
+        Account.status == "disconnected"
     ).scalar()
 
     return {
@@ -130,7 +129,7 @@ async def list_users(
         )
     if role:
         try:
-            q = q.filter(User.role == UserRole(role))
+            q = q.filter(User.role == str(role))
         except ValueError:
             pass
 
@@ -168,9 +167,9 @@ async def create_user(
         raise HTTPException(status_code=409, detail="Email already registered")
 
     try:
-        role = UserRole(req.role)
+        role = str(req.role)
     except ValueError:
-        role = UserRole.TRADER
+        role = "trader"
 
     user = User(
         email=req.email.lower(),
@@ -201,7 +200,7 @@ async def update_user(
 
     if req.role is not None:
         try:
-            user.role = UserRole(req.role)
+            user.role = str(req.role)
         except ValueError:
             raise HTTPException(status_code=422, detail=f"Invalid role: {req.role}")
     if req.is_active is not None:
@@ -249,7 +248,7 @@ async def impersonate_user(
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.role == UserRole.SUPER_ADMIN:
+    if str(user.role) == "super_admin":
         raise HTTPException(status_code=403, detail="Cannot impersonate other super admins")
 
     db.add(AuditLog(
@@ -262,7 +261,7 @@ async def impersonate_user(
     db.commit()
 
     # Generate short-lived token (15 min)
-    token = create_access_token(user.id, user.role.value)
+    token = create_access_token(user.id, str(user.role.value if hasattr(user.role, "value") else user.role))
     return {
         "access_token": token,
         "expires_in":   900,
@@ -379,7 +378,7 @@ def _format_user(user: User, db: Session) -> dict:
         "id":           user.id,
         "email":        user.email,
         "display_name": user.display_name,
-        "role":         user.role.value,
+        "role": str(user.role.value if hasattr(user.role, "value") else user.role),
         "is_active":    user.is_active,
         "is_verified":  user.is_verified,
         "totp_enabled": user.totp_enabled,
