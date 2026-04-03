@@ -66,7 +66,7 @@ class DepositWithdrawalCreate(BaseModel):
 
 def user_can_access_account(user: User, account: Account, db: Session) -> bool:
     """Check if user can access this account (own account or explicit permission)."""
-    if user.role in (UserRole.SUPER_ADMIN, UserRole.ADMIN):
+    if user.role in ("super_admin", "admin"):
         return True
     if account.owner_id == user.id:
         return True
@@ -165,11 +165,6 @@ async def create_account(
     if existing:
         raise HTTPException(status_code=409, detail="Account already registered")
 
-    try:
-        acct_type = AccountType(req.account_type)
-    except ValueError:
-        acct_type = AccountType.LIVE
-
     account = Account(
         owner_id=current_user.id,
         account_number=req.account_number,
@@ -178,7 +173,7 @@ async def create_account(
         label=req.label,
         account_currency=req.account_currency,
         leverage=req.leverage,
-        account_type=acct_type,
+        account_type=req.account_type,
         initial_deposit=req.initial_deposit,
         group_id=req.group_id,
         start_date=datetime.fromisoformat(req.start_date) if req.start_date else None,
@@ -206,7 +201,7 @@ async def list_accounts(
 ):
     q = db.query(Account).filter(Account.is_active == True)
 
-    if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.ADMIN):
+    if current_user.role not in ("super_admin", "admin"):
         # Only own accounts + explicitly granted ones
         granted_ids = [p.account_id for p in db.query(AccountPermission).filter(
             AccountPermission.user_id == current_user.id
@@ -225,7 +220,7 @@ async def list_accounts(
     if status_f:
         from models import AccountStatus
         try:
-            q = q.filter(Account.status == AccountStatus(status_f))
+            q = q.filter(Account.status == status_f)
         except ValueError:
             pass
     if account_type:
@@ -303,7 +298,7 @@ async def delete_account(
     db: Session = Depends(get_db),
 ):
     account = get_account_or_404(account_id, db)
-    if account.owner_id != current_user.id and current_user.role not in (UserRole.SUPER_ADMIN, UserRole.ADMIN):
+    if account.owner_id != current_user.id and current_user.role not in ("super_admin", "admin"):
         raise HTTPException(status_code=403, detail="Access denied")
 
     account.is_active = False
@@ -323,7 +318,7 @@ async def generate_api_key(
     db: Session = Depends(get_db),
 ):
     account = get_account_or_404(account_id, db)
-    if account.owner_id != current_user.id and current_user.role != UserRole.SUPER_ADMIN:
+    if account.owner_id != current_user.id and current_user.role != "super_admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
     raw_key = f"td_{secrets.token_urlsafe(32)}"
@@ -345,7 +340,7 @@ async def revoke_api_key(
     db: Session = Depends(get_db),
 ):
     account = get_account_or_404(account_id, db)
-    if account.owner_id != current_user.id and current_user.role != UserRole.SUPER_ADMIN:
+    if account.owner_id != current_user.id and current_user.role != "super_admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
     account.push_api_key_hash   = None
