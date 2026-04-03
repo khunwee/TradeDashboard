@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MT4/MT5 Trading Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
+</head>
+<body>
+
+<div id="app" x-data="dashboard()" x-init="init()" class="app-layout">
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- TOPBAR                                                                 -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+      Trading Dashboard
+    </div>
+
+    <!-- Period pills (shown on account view) -->
+    <div class="tabs" x-show="activePage === 'account' && selectedId" style="display:none" x-cloak>
+      <template x-for="p in ['Today','1W','1M','3M','6M','1Y','All']">
+        <button class="tab-btn"
+                :class="{active: $data.chartPeriod === p}"
+                x-text="p"
+                @click="$dispatch('switch-period', p)">
+        </button>
+      </template>
+    </div>
+
+    <div class="topbar-divider"></div>
+
+    <!-- WS Status -->
+    <div class="ws-status">
+      <div class="ws-dot" id="wsIndicator"></div>
+      <span id="wsLabel" style="font-size:11px">Connecting</span>
+    </div>
+
+    <!-- Notifications bell -->
+    <div style="position:relative">
+      <button class="btn btn-ghost btn-icon" @click="notifOpen = !notifOpen; if(notifOpen) loadNotifications()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span x-show="unreadCount > 0" x-text="unreadCount"
+              style="position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700">
+        </span>
+      </button>
+
+      <!-- Notif dropdown -->
+      <div x-show="notifOpen" @click.away="notifOpen = false" x-cloak
+           style="position:absolute;right:0;top:calc(100% + 8px);width:340px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);z-index:200">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;font-size:13px">Notifications</span>
+          <button class="btn btn-ghost btn-sm" @click="markAllRead()" x-show="unreadCount > 0">Mark all read</button>
+        </div>
+        <div style="max-height:360px;overflow-y:auto">
+          <template x-if="!notifications.length">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No new notifications</div>
+          </template>
+          <template x-for="n in notifications" :key="n.id">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer"
+                 :style="n.is_read ? '' : 'background:var(--accent-bg)'"
+                 @click="window.location.href = n.link || '#'">
+              <div style="font-size:13px;font-weight:500;color:var(--text-primary)" x-text="n.title"></div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px" x-text="n.message"></div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px" x-text="new Date(n.created_at).toLocaleString()"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- User menu -->
+    <div style="position:relative" x-data="{open:false}">
+      <button class="btn btn-ghost btn-sm" @click="open=!open" style="gap:8px">
+        <div style="width:26px;height:26px;background:var(--accent-bg);border:1px solid var(--accent-dim);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);font-weight:600"
+             x-text="($store.app.user?.display_name || 'U').charAt(0).toUpperCase()"></div>
+        <span x-text="$store.app.user?.display_name || 'User'" style="font-size:13px;max-width:100px" class="truncate"></span>
+      </button>
+      <div x-show="open" @click.away="open=false" x-cloak
+           style="position:absolute;right:0;top:calc(100% + 8px);min-width:180px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);z-index:200;overflow:hidden">
+        <a href="#" style="display:block;padding:10px 16px;font-size:13px;color:var(--text-secondary)" @click.prevent="activePage='settings'">Settings</a>
+        <a href="#" style="display:block;padding:10px 16px;font-size:13px;color:var(--text-secondary)" @click.prevent="activePage='alerts'">Alerts</a>
+        <div style="height:1px;background:var(--border)"></div>
+        <a href="#" style="display:block;padding:10px 16px;font-size:13px;color:var(--red)" @click.prevent="$store.app.logout()">Sign Out</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- SIDEBAR                                                                -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <div class="sidebar-link" :class="{active: activePage==='portfolio'}" @click="showPortfolio()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Portfolio</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Accounts</div>
+      <template x-for="acct in accounts" :key="acct.id">
+        <div class="sidebar-link" :class="{active: selectedId === acct.id}" @click="selectAccount(acct.id)">
+          <div class="status-dot" :style="`background: var(--status-${acct.status})`"></div>
+          <span x-text="acct.label || acct.account_number" class="truncate"></span>
+        </div>
+      </template>
+
+      <div class="sidebar-link" @click="activePage='add-account'" :class="{active: activePage==='add-account'}" style="color:var(--text-muted);border:1px dashed var(--border);margin-top:4px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>Add Account</span>
+      </div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-link" :class="{active: activePage==='alerts'}" @click="activePage='alerts'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        <span>Alerts</span>
+        <span x-show="unreadCount > 0" x-text="unreadCount"
+              style="margin-left:auto;background:var(--red);color:#fff;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:700"></span>
+      </div>
+      <div class="sidebar-link" :class="{active: activePage==='settings'}" @click="activePage='settings'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- MAIN CONTENT                                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Loading skeleton -->
+    <template x-if="loading">
+      <div>
+        <div class="metric-grid">
+          <template x-for="i in 6">
+            <div class="metric-card"><div class="skeleton" style="height:60px;border-radius:6px"></div></div>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- ── PORTFOLIO VIEW ─────────────────────────────────────────────────── -->
+    <template x-if="!loading && activePage === 'portfolio'">
+      <div>
+        <div class="page-header">
+          <div>
+            <div class="page-title">Portfolio Overview</div>
+            <div class="page-subtitle" x-text="`${accounts.length} account${accounts.length !== 1 ? 's' : ''} · Live`"></div>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" class="input" placeholder="Search accounts…" x-model="searchQuery" style="width:200px">
+            <select class="input select" x-model="filterStatus" style="width:140px">
+              <option value="">All status</option>
+              <option value="live">Live</option>
+              <option value="delayed">Delayed</option>
+              <option value="disconnected">Disconnected</option>
+            </select>
+            <button class="btn btn-primary" @click="activePage='add-account'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add Account
+            </button>
+          </div>
+        </div>
+
+        <!-- Portfolio Summary Metrics -->
+        <div class="metric-grid" style="grid-template-columns: repeat(5, 1fr)">
+          <div class="metric-card">
+            <div class="metric-label">Total Balance</div>
+            <div class="metric-value accent" x-text="'$' + (portfolio?.total_balance || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Equity</div>
+            <div class="metric-value" x-text="'$' + (portfolio?.total_equity || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Floating P/L</div>
+            <div class="metric-value" :class="plClass(portfolio?.total_floating_pl)" x-text="plSign(portfolio?.total_floating_pl || 0)"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Profit Today</div>
+            <div class="metric-value" :class="plClass(portfolio?.total_profit_today)" x-text="plSign(portfolio?.total_profit_today || 0)"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Open Orders</div>
+            <div class="metric-value" x-text="portfolio?.total_open_orders || 0"></div>
+          </div>
+        </div>
+
+        <!-- Account Cards Grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px">
+          <template x-for="acct in filteredAccounts" :key="acct.id">
+            <div class="account-card" @click="selectAccount(acct.id)" :class="{selected: selectedId === acct.id}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div>
+                  <div style="font-weight:600;font-size:14px;color:var(--text-primary)" x-text="acct.label || acct.account_number"></div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px" x-text="(acct.broker_name || acct.broker_server) + ' · #' + acct.account_number"></div>
+                </div>
+                <div class="status-badge" :class="acct.status">
+                  <div class="status-dot"></div>
+                  <span x-text="acct.status === 'market_closed' ? 'Market Closed' : acct.status.charAt(0).toUpperCase() + acct.status.slice(1)"></span>
+                </div>
+              </div>
+
+              <!-- Mini metrics -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">EQUITY</div>
+                  <div style="font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--accent)" x-text="'$' + (acct.equity||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})"></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">FLOATING P/L</div>
+                  <div style="font-family:var(--font-mono);font-size:13px;font-weight:600" :class="plClass(acct.floating_pl)" x-text="plSign(acct.floating_pl||0)"></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">TODAY P/L</div>
+                  <div style="font-family:var(--font-mono);font-size:13px;font-weight:600" :class="plClass(acct.profit_today)" x-text="plSign(acct.profit_today||0)"></div>
+                </div>
+              </div>
+
+              <!-- Stats row -->
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding-top:10px;border-top:1px solid var(--border)">
+                <div style="text-align:center">
+                  <div style="font-size:10px;color:var(--text-muted)">Win Rate</div>
+                  <div style="font-size:12px;font-weight:600;font-family:var(--font-mono)" x-text="(acct.win_rate||0).toFixed(1)+'%'"></div>
+                </div>
+                <div style="text-align:center">
+                  <div style="font-size:10px;color:var(--text-muted)">P. Factor</div>
+                  <div style="font-size:12px;font-weight:600;font-family:var(--font-mono)" x-text="(acct.profit_factor||0).toFixed(2)"></div>
+                </div>
+                <div style="text-align:center">
+                  <div style="font-size:10px;color:var(--text-muted)">Max DD</div>
+                  <div style="font-size:12px;font-weight:600;font-family:var(--font-mono);color:var(--red)" x-text="(acct.max_drawdown_pct||0).toFixed(2)+'%'"></div>
+                </div>
+                <div style="text-align:center">
+                  <div style="font-size:10px;color:var(--text-muted)">Growth</div>
+                  <div style="font-size:12px;font-weight:600;font-family:var(--font-mono)" :class="plClass(acct.growth_pct)" x-text="(acct.growth_pct||0) >= 0 ? '+' : '' + (acct.growth_pct||0).toFixed(1)+'%'"></div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- ── ACCOUNT DETAIL VIEW ─────────────────────────────────────────────── -->
+    <template x-if="!loading && activePage === 'account' && selectedId">
+      <div x-data="accountDetail(selectedId)" x-init="init()">
+
+        <!-- Back + header -->
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-sm" @click="showPortfolio()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div>
+              <div class="page-title" x-text="account?.label || account?.account_number || '…'"></div>
+              <div class="page-subtitle" x-show="account" x-text="`#${account?.account_number} · ${account?.broker_name || account?.broker_server} · ${account?.ea_name || 'EA'} v${account?.ea_version || '?'}`"></div>
+            </div>
+            <div class="status-badge" :class="account?.status" x-show="account">
+              <div class="status-dot"></div>
+              <span x-text="account?.status || ''"></span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary btn-sm" @click="exportCSV()">Export CSV</button>
+            <button class="btn btn-secondary btn-sm" @click="switchTab('settings')">Settings</button>
+          </div>
+        </div>
+
+        <!-- Live Metrics Grid -->
+        <div class="metric-grid" x-show="account">
+          <div class="metric-card">
+            <div class="metric-label">Balance</div>
+            <div class="metric-value accent" x-text="'$' + (account?.balance||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Equity</div>
+            <div class="metric-value" x-text="'$' + (account?.equity||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Floating P/L</div>
+            <div class="metric-value" :class="plClass(account?.floating_pl)" x-text="plSign(account?.floating_pl||0)"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Profit Today</div>
+            <div class="metric-value" :class="plClass(account?.profit_today)" x-text="plSign(account?.profit_today||0)"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Margin Level</div>
+            <div class="metric-value" x-text="(account?.margin_level||0).toFixed(1) + '%'"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Open Orders</div>
+            <div class="metric-value" x-text="account?.open_orders_count || 0"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Win Rate</div>
+            <div class="metric-value" x-text="(account?.win_rate||0).toFixed(1) + '%'"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Profit Factor</div>
+            <div class="metric-value" :class="(account?.profit_factor||0) >= 1.5 ? 'positive' : (account?.profit_factor||0) < 1 ? 'negative' : ''" x-text="(account?.profit_factor||0).toFixed(2)"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Max Drawdown</div>
+            <div class="metric-value negative" x-text="(account?.max_drawdown_pct||0).toFixed(2) + '%'"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Sharpe Ratio</div>
+            <div class="metric-value" x-text="account?.sharpe_ratio ? account.sharpe_ratio.toFixed(2) : 'N/A'"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Growth</div>
+            <div class="metric-value" :class="plClass(account?.growth_pct)" x-text="(account?.growth_pct||0) >= 0 ? '+' : '' + (account?.growth_pct||0).toFixed(2)+'%'"></div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Expectancy</div>
+            <div class="metric-value" :class="plClass(account?.expectancy)" x-text="plSign(account?.expectancy||0)"></div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:0">
+          <template x-for="tab in ['overview','trades','analytics','risk','open']">
+            <button class="tab-btn" :class="{active: activeTab === tab}"
+                    x-text="tab.charAt(0).toUpperCase() + tab.slice(1)"
+                    @click="switchTab(tab)"
+                    style="border-bottom: 2px solid transparent;border-radius:0;padding-bottom:12px">
+            </button>
+          </template>
+        </div>
+
+        <!-- ── OVERVIEW TAB ──────────────────────────────────────────────── -->
+        <div x-show="activeTab === 'overview'">
+          <!-- Equity Chart -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-header">
+              <span class="card-title">Equity Curve</span>
+              <div class="tabs">
+                <template x-for="p in ['Today','1W','1M','3M','6M','1Y','All']">
+                  <button class="tab-btn" :class="{active: chartPeriod === p}" x-text="p" @click="switchPeriod(p)"></button>
+                </template>
+              </div>
+            </div>
+            <div style="height:300px" id="equityChart"></div>
+          </div>
+
+          <!-- Drawdown Chart -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-header"><span class="card-title">Drawdown</span></div>
+            <div style="height:160px"><canvas id="drawdownChart"></canvas></div>
+          </div>
+
+          <!-- More metrics table -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">Full Statistics</span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+              <template x-for="[label, value, colored] in [
+                ['Total Trades', account?.total_trades || 0, false],
+                ['Max Win Streak', account?.max_consecutive_wins || 0, false],
+                ['Max Loss Streak', account?.max_consecutive_losses || 0, false],
+                ['Largest Win', '$' + (account?.largest_win||0).toFixed(2), false],
+                ['Largest Loss', '$' + Math.abs(account?.largest_loss||0).toFixed(2), false],
+                ['Avg Hold Time', (account?.avg_hold_time_min ? (account.avg_hold_time_min < 60 ? account.avg_hold_time_min.toFixed(0) + 'm' : (account.avg_hold_time_min/60).toFixed(1) + 'h') : 'N/A'), false],
+                ['Sortino Ratio', account?.sortino_ratio ? account.sortino_ratio.toFixed(2) : 'N/A', false],
+                ['Calmar Ratio', account?.calmar_ratio ? account.calmar_ratio.toFixed(2) : 'N/A', false],
+                ['Recovery Factor', (account?.recovery_factor||0).toFixed(2), false],
+                ['Annualized Return', (account?.annualized_return||0).toFixed(2) + '%', false],
+                ['Avg Daily Profit', '$' + (account?.avg_daily_profit||0).toFixed(2), true],
+                ['Peak Equity', '$' + (account?.peak_equity||0).toLocaleString(), false],
+              ]">
+                <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px" x-text="label"></div>
+                  <div style="font-family:var(--font-mono);font-size:13px;font-weight:600" x-text="value"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── OPEN POSITIONS TAB ──────────────────────────────────────── -->
+        <div x-show="activeTab === 'open'">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" x-text="`Open Positions (${openPositions.length})`"></span>
+              <button class="btn btn-secondary btn-sm" @click="loadOpenPositions()">Refresh</button>
+            </div>
+            <div class="table-wrapper">
+              <table class="dt">
+                <thead><tr>
+                  <th>Ticket</th><th>Symbol</th><th>Type</th><th>Lots</th>
+                  <th>Open Price</th><th>Current</th><th>SL</th><th>TP</th>
+                  <th>Floating P/L</th><th>MAE</th><th>MFE</th><th>Duration</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="pos in openPositions" :key="pos.ticket">
+                    <tr>
+                      <td class="mono" x-text="pos.ticket"></td>
+                      <td style="font-weight:600" x-text="pos.symbol"></td>
+                      <td><span :style="`color: ${pos.trade_type.startsWith('buy') ? 'var(--green)' : 'var(--red)'}`" x-text="pos.trade_type.toUpperCase()"></span></td>
+                      <td class="mono" x-text="pos.lots.toFixed(2)"></td>
+                      <td class="mono" x-text="pos.open_price.toFixed(5)"></td>
+                      <td class="mono" x-text="pos.current_price.toFixed(5)"></td>
+                      <td class="mono text-muted" x-text="pos.sl ? pos.sl.toFixed(5) : '—'"></td>
+                      <td class="mono text-muted" x-text="pos.tp ? pos.tp.toFixed(5) : '—'"></td>
+                      <td class="mono" :class="plClass(pos.floating_pl)" x-text="plSign(pos.floating_pl)"></td>
+                      <td class="mono loss" x-text="pos.mae ? '$' + pos.mae.toFixed(2) : '—'"></td>
+                      <td class="mono profit" x-text="pos.mfe ? '$' + pos.mfe.toFixed(2) : '—'"></td>
+                      <td class="mono text-muted" x-text="duration(pos.duration_min)"></td>
+                    </tr>
+                  </template>
+                  <template x-if="!openPositions.length">
+                    <tr><td colspan="12" style="text-align:center;padding:24px;color:var(--text-muted)">No open positions</td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TRADES TAB ────────────────────────────────────────────────── -->
+        <div x-show="activeTab === 'trades'">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" x-text="`Trade History (${tradeTotal})`"></span>
+              <button class="btn btn-secondary btn-sm" @click="exportCSV()">Export CSV</button>
+            </div>
+            <div class="table-wrapper">
+              <table class="dt">
+                <thead><tr>
+                  <th>Ticket</th><th>Symbol</th><th>Type</th><th>Lots</th>
+                  <th>Open</th><th>Close</th><th>Net P/L</th><th>Pips</th>
+                  <th>Duration</th><th>Close Time</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="t in trades" :key="t.ticket">
+                    <tr>
+                      <td class="mono" x-text="t.ticket"></td>
+                      <td style="font-weight:600" x-text="t.symbol"></td>
+                      <td><span :style="`color: ${t.trade_type.startsWith('buy') ? 'var(--green)' : 'var(--red)'}`" x-text="t.trade_type.toUpperCase()"></span></td>
+                      <td class="mono" x-text="t.lots.toFixed(2)"></td>
+                      <td class="mono" x-text="t.open_price.toFixed(5)"></td>
+                      <td class="mono" x-text="t.close_price.toFixed(5)"></td>
+                      <td class="mono" :class="t.is_win ? 'profit' : 'loss'" x-text="plSign(t.net_profit)"></td>
+                      <td class="mono" x-text="t.profit_pips ? t.profit_pips.toFixed(1) : '—'"></td>
+                      <td class="mono text-muted" x-text="duration(t.duration_min)"></td>
+                      <td class="mono text-muted" x-text="new Date(t.close_time).toLocaleString()"></td>
+                    </tr>
+                  </template>
+                  <template x-if="!trades.length">
+                    <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-muted)">No closed trades found</td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <!-- Pagination -->
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 0;gap:12px" x-show="tradePages > 1">
+              <span style="font-size:12px;color:var(--text-muted)" x-text="`Page ${tradesPage} of ${tradePages}`"></span>
+              <div class="flex gap-2">
+                <button class="btn btn-secondary btn-sm" @click="loadTrades(tradesPage-1)" :disabled="tradesPage <= 1">Previous</button>
+                <button class="btn btn-secondary btn-sm" @click="loadTrades(tradesPage+1)" :disabled="tradesPage >= tradePages">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ANALYTICS TAB ─────────────────────────────────────────────── -->
+        <div x-show="activeTab === 'analytics'">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Symbol Performance</span></div>
+              <div style="height:280px"><canvas id="symbolChart"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">Profit Distribution</span></div>
+              <div style="height:280px"><canvas id="profitDistChart"></canvas></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-header"><span class="card-title">Monthly Returns</span></div>
+            <div id="monthlyHeatmap"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Hourly Performance Heatmap</span></div>
+              <div id="hourlyHeatmap"></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">Duration Distribution</span></div>
+              <div style="height:240px"><canvas id="durationChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── RISK TAB ──────────────────────────────────────────────────── -->
+        <div x-show="activeTab === 'risk'">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Currency Exposure</span></div>
+              <div style="height:240px"><canvas id="currencyChart"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">Rolling 30-Day Metrics</span></div>
+              <div style="height:240px"><canvas id="rollingChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <div class="card-header"><span class="card-title">Daily P/L (Last 90 Days)</span></div>
+            <div style="height:200px"><canvas id="dailyPLChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- ── SETTINGS TAB ──────────────────────────────────────────────── -->
+        <div x-show="activeTab === 'settings'" x-data="account?.id ? accountSettings(account.id) : {}" x-init="account?.id && init()">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Account Info</span></div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="label">Display Label</label>
+                <input class="input" x-model="form.label" placeholder="My Account">
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="label">Broker Name</label>
+                <input class="input" x-model="form.broker_name" placeholder="Broker">
+              </div>
+              <div class="form-group" style="margin-bottom:16px">
+                <label class="label">Heartbeat Timeout (seconds)</label>
+                <input class="input" type="number" x-model.number="form.heartbeat_timeout_sec" min="30" max="300">
+              </div>
+              <button class="btn btn-primary" @click="saveSettings()">Save Changes</button>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><span class="card-title">EA API Key</span></div>
+              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Generate an API key for your MetaTrader EA to push data to this dashboard.</p>
+              <div x-show="apiKey" style="background:var(--bg-elevated);border:1px solid var(--accent-dim);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">API Key (copy now — not shown again)</div>
+                <div style="font-family:var(--font-mono);font-size:12px;color:var(--accent);word-break:break-all" x-text="apiKey"></div>
+                <button class="btn btn-secondary btn-sm" style="margin-top:8px" @click="copyToClipboard(apiKey)">Copy</button>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary" @click="generateApiKey()">Generate New Key</button>
+                <button class="btn btn-danger" @click="revokeApiKey()">Revoke Key</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- ── ADD ACCOUNT PAGE ──────────────────────────────────────────────── -->
+    <template x-if="activePage === 'add-account'">
+      <div x-data="addAccountForm()" x-init="init()">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Add MT4 / MT5 Account</div>
+            <div class="page-sub">Connect your MetaTrader account to the dashboard</div>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:560px">
+          <div x-show="successMsg" style="background:var(--green-bg);border:1px solid var(--green-dim);color:var(--green);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px" x-text="successMsg"></div>
+          <div x-show="errorMsg" style="background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px" x-text="errorMsg"></div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="label">MT4/MT5 Account Number <span style="color:var(--red)">*</span></label>
+            <input class="input" x-model="form.account_number" placeholder="e.g. 12345678" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">The login number you use in MetaTrader</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="label">Broker Server <span style="color:var(--red)">*</span></label>
+            <input class="input" x-model="form.broker_server" placeholder="e.g. ICMarketsLive-MT4" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Found in MetaTrader → File → Login → Server dropdown</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="label">Broker Name</label>
+            <input class="input" x-model="form.broker_name" placeholder="e.g. IC Markets" style="width:100%">
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="label">Account Label (optional)</label>
+            <input class="input" x-model="form.label" placeholder="e.g. My Prop Account" style="width:100%">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="form-group">
+              <label class="label">Currency</label>
+              <select class="input select" x-model="form.account_currency" style="width:100%">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="THB">THB</option>
+                <option value="JPY">JPY</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label">Account Type</label>
+              <select class="input select" x-model="form.account_type" style="width:100%">
+                <option value="live">Live</option>
+                <option value="demo">Demo</option>
+                <option value="contest">Contest</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="form-group">
+              <label class="label">Leverage</label>
+              <select class="input select" x-model.number="form.leverage" style="width:100%">
+                <option value="50">1:50</option>
+                <option value="100">1:100</option>
+                <option value="200">1:200</option>
+                <option value="500">1:500</option>
+                <option value="1000">1:1000</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label">Initial Deposit ($)</label>
+              <input class="input" type="number" x-model.number="form.initial_deposit" placeholder="0.00" style="width:100%">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button class="btn btn-primary" @click="submit()" :disabled="loading">
+              <span x-text="loading ? 'Creating...' : 'Create Account'"></span>
+            </button>
+            <button class="btn btn-ghost" @click="activePage='portfolio'">Cancel</button>
+          </div>
+        </div>
+
+        <!-- API Key display after success -->
+        <div x-show="apiKey" class="card" style="max-width:560px;margin-top:16px;border-color:var(--accent-dim)">
+          <div style="font-size:14px;font-weight:600;color:var(--accent);margin-bottom:10px">Account created! Copy your EA API Key</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">This key is shown ONCE only. Paste it into the EA's ApiKey input in MetaTrader.</div>
+          <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:var(--font-mono);font-size:12px;color:var(--accent);word-break:break-all;margin-bottom:12px" x-text="apiKey"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" @click="copyKey()">Copy API Key</button>
+            <button class="btn btn-ghost" @click="activePage='portfolio';init()">Go to Portfolio</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ── ALERTS PAGE ─────────────────────────────────────────────────────── -->
+    <template x-if="activePage === 'alerts'">
+      <div x-data="alertsManager()" x-init="init()">
+        <div class="page-header">
+          <div class="page-title">Alert Rules</div>
+          <button class="btn btn-primary" @click="showForm=true;editRule=null;form={label:'',condition_type:'',channels:['in_app'],cooldown_min:15}">
+            New Alert
+          </button>
+        </div>
+
+        <div class="card">
+          <template x-if="!rules.length">
+            <div style="padding:32px;text-align:center;color:var(--text-muted)">No alert rules yet. Create one to get started.</div>
+          </template>
+          <div class="table-wrapper" x-show="rules.length">
+            <table class="dt">
+              <thead><tr><th>Label</th><th>Condition</th><th>Threshold</th><th>Channels</th><th>Last Fired</th><th>Fires</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                <template x-for="rule in rules" :key="rule.id">
+                  <tr>
+                    <td style="font-weight:500" x-text="rule.label"></td>
+                    <td x-text="rule.condition_type.replace(/_/g,' ')"></td>
+                    <td class="mono" x-text="rule.threshold_value ? (rule.threshold_unit === 'pct' ? rule.threshold_value + '%' : '$' + rule.threshold_value) : '—'"></td>
+                    <td x-text="(rule.channels || []).join(', ')"></td>
+                    <td class="mono text-muted" x-text="rule.last_triggered ? new Date(rule.last_triggered).toLocaleString() : '—'"></td>
+                    <td class="mono" x-text="rule.trigger_count || 0"></td>
+                    <td>
+                      <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px">
+                        <input type="checkbox" :checked="rule.is_active" @change="toggleRule(rule)" style="accent-color:var(--accent)">
+                        <span x-text="rule.is_active ? 'Active' : 'Paused'" :style="rule.is_active ? 'color:var(--green)' : 'color:var(--text-muted)'"></span>
+                      </label>
+                    </td>
+                    <td>
+                      <div class="flex gap-2">
+                        <button class="btn btn-ghost btn-sm" @click="editForm(rule)">Edit</button>
+                        <button class="btn btn-danger btn-sm" @click="deleteRule(rule)">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Alert Form Modal -->
+        <div x-show="showForm" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:flex;align-items:center;justify-content:center" @click.self="showForm=false">
+          <div class="card" style="width:480px;max-height:90vh;overflow-y:auto">
+            <div class="card-header">
+              <span class="card-title" x-text="editRule ? 'Edit Alert Rule' : 'New Alert Rule'"></span>
+              <button class="btn btn-ghost btn-icon" @click="showForm=false">×</button>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="label">Label</label>
+              <input class="input" x-model="form.label" placeholder="e.g. Daily 5% Drawdown Warning">
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="label">Condition</label>
+              <select class="input select" x-model="form.condition_type">
+                <option value="">Select condition…</option>
+                <template x-for="c in conditions">
+                  <option :value="c.value" x-text="c.label"></option>
+                </template>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:12px" x-show="form.condition_type">
+              <label class="label">Threshold Value</label>
+              <div class="flex gap-2">
+                <input class="input" type="number" x-model.number="form.threshold_value" placeholder="e.g. 5">
+                <select class="input select" x-model="form.threshold_unit" style="width:120px">
+                  <option value="dollar">$</option>
+                  <option value="pct">%</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="label">Cooldown (minutes)</label>
+              <input class="input" type="number" x-model.number="form.cooldown_min" min="5" max="1440">
+            </div>
+            <div class="form-group" style="margin-bottom:16px">
+              <label class="label">Notification Channels</label>
+              <div class="flex gap-2" style="flex-wrap:wrap">
+                <template x-for="ch in channels">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;background:var(--bg-elevated);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)">
+                    <input type="checkbox" :checked="form.channels?.includes(ch.value)" @change="toggleChannel(ch.value)" style="accent-color:var(--accent)">
+                    <span x-text="ch.label"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-primary" @click="saveRule()">Save Rule</button>
+              <button class="btn btn-secondary" @click="showForm=false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+  </main>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="/static/js/websocket.js"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/dashboard.js"></script>
+<script>
+  // WS status indicator
+  const wsIndicator = document.getElementById('wsIndicator');
+  const wsLabel     = document.getElementById('wsLabel');
+
+  const updateWSStatus = (status) => {
+    wsIndicator.className = `ws-dot ${status === 'connected' ? 'connected' : status === 'error' ? 'error' : ''}`;
+    wsLabel.textContent = status === 'connected' ? 'Live' : status === 'connecting' ? 'Connecting…' : 'Offline';
+  };
+
+  // Override wsManager to propagate status
+  const _origConnect = wsManager._connect.bind(wsManager);
+  wsManager._connect = function(key, url, onMsg) {
+    _origConnect(key, url, onMsg);
+    const ws = wsManager._sockets[key];
+    if (ws) {
+      const origOpen  = ws.onopen;
+      const origClose = ws.onclose;
+      ws.onopen  = (e) => { updateWSStatus('connected');    origOpen  && origOpen(e); };
+      ws.onclose = (e) => { updateWSStatus('disconnected'); origClose && origClose(e); };
+    }
+  };
+</script>
+</body>
+</html>

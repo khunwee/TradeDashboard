@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — MT4/MT5 Trading Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <style>
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+         background:radial-gradient(ellipse at 20% 50%,rgba(0,212,170,0.04) 0%,transparent 60%),var(--bg-base)}
+    .wrap{width:100%;max-width:400px;padding:20px}
+    .logo{text-align:center;margin-bottom:28px}
+    .logo-mark{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;
+               background:var(--accent-bg);border:1px solid var(--accent-dim);border-radius:14px;margin-bottom:12px}
+    .logo-mark svg{color:var(--accent)}
+    .logo-title{font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:4px}
+    .logo-sub{font-size:13px;color:var(--text-muted)}
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl);
+          padding:28px;box-shadow:var(--shadow-lg)}
+    .form-group{margin-bottom:14px}
+    .label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:5px}
+    .input-wrap{position:relative}
+    .input-wrap .input{padding-left:38px;width:100%}
+    .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none}
+    .show-pw{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;
+             color:var(--text-muted);cursor:pointer;padding:0;display:flex}
+    .show-pw:hover{color:var(--text-primary)}
+    .msg{border-radius:var(--radius);padding:10px 14px;font-size:13px;margin-bottom:14px;display:none;line-height:1.5}
+    .msg.show{display:block}
+    .msg.error{background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red)}
+    .msg.success{background:var(--green-bg);border:1px solid var(--green-dim);color:var(--green)}
+    .msg.info{background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-secondary)}
+    .form-footer{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .form-footer a{font-size:12px;color:var(--accent);text-decoration:none}
+    .btn-login{width:100%;justify-content:center;padding:11px;font-size:14px}
+    .btn-login:disabled{opacity:0.6;cursor:not-allowed}
+    .login-link{text-align:center;font-size:13px;color:var(--text-muted);margin-top:20px}
+    .login-link a{color:var(--accent);font-weight:500;text-decoration:none}
+    /* 2FA step */
+    .step{display:none}.step.active{display:block}
+    .totp-input{text-align:center;font-family:var(--font-mono);font-size:28px;letter-spacing:8px;font-weight:600;padding:14px;width:100%}
+    .back-link{font-size:12px;color:var(--text-muted);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:14px}
+    .back-link:hover{color:var(--text-primary)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+    </div>
+    <div class="logo-title">Trading Dashboard</div>
+    <div class="logo-sub">MT4 / MT5 Professional Analytics</div>
+  </div>
+
+  <div class="card">
+    <div id="msg" class="msg"></div>
+
+    <!-- Step 1: Login -->
+    <div id="stepLogin" class="step active">
+      <div class="form-group">
+        <label class="label">Email Address</label>
+        <div class="input-wrap">
+          <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+          </svg>
+          <input type="email" id="emailInput" class="input" placeholder="you@example.com" autocomplete="email">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="label">Password</label>
+        <div class="input-wrap">
+          <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <input type="password" id="passInput" class="input" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="show-pw" onclick="togglePw()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer">
+          <input type="checkbox" id="rememberMe" style="accent-color:var(--accent)"> Remember me
+        </label>
+        <a href="#">Forgot password?</a>
+      </div>
+
+      <button id="loginBtn" class="btn btn-primary btn-login" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- Step 2: 2FA -->
+    <div id="step2FA" class="step">
+      <div class="back-link" onclick="backToLogin()">← Back</div>
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px">Two-Factor Authentication</div>
+        <div style="font-size:13px;color:var(--text-muted)">Enter the 6-digit code from your authenticator app</div>
+      </div>
+      <input type="text" id="totpInput" class="input totp-input" placeholder="000000"
+             maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+      <button class="btn btn-primary btn-login" style="margin-top:12px" onclick="verify2FA()">Verify</button>
+    </div>
+  </div>
+
+  <div class="login-link">Don't have an account? <a href="/static/register.html">Create one</a></div>
+</div>
+
+<script>
+let _2fa_email = '', _2fa_pass = '';
+
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg show ' + type;
+}
+function hideMsg() { document.getElementById('msg').className = 'msg'; }
+function setLoading(id, on) {
+  const b = document.getElementById(id);
+  b.disabled = on;
+  b.textContent = on ? 'Please wait...' : (id === 'loginBtn' ? 'Sign In' : 'Verify');
+}
+function togglePw() {
+  const i = document.getElementById('passInput');
+  i.type = i.type === 'password' ? 'text' : 'password';
+}
+function backToLogin() {
+  document.getElementById('stepLogin').className = 'step active';
+  document.getElementById('step2FA').className   = 'step';
+  hideMsg();
+}
+
+async function doLogin() {
+  const email = document.getElementById('emailInput').value.trim();
+  const pass  = document.getElementById('passInput').value;
+
+  if (!email) return showMsg('Please enter your email address', 'error');
+  if (!pass)  return showMsg('Please enter your password', 'error');
+
+  hideMsg();
+  setLoading('loginBtn', true);
+  showMsg('Signing in...', 'info');
+
+  try {
+    const res = await fetch('/api/v1/auth/login', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ email, password: pass, remember_me: document.getElementById('rememberMe').checked }),
+    });
+
+    let data;
+    try { data = await res.json(); } catch(e) { data = {}; }
+
+    hideMsg();
+
+    if (res.status === 200 && data.requires_2fa) {
+      _2fa_email = email;
+      _2fa_pass  = pass;
+      document.getElementById('stepLogin').className = 'step';
+      document.getElementById('step2FA').className   = 'step active';
+      setTimeout(() => document.getElementById('totpInput').focus(), 100);
+      return;
+    }
+
+    if (res.ok && data.access_token) {
+      localStorage.setItem('access_token',  data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token || '');
+      if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+      showMsg('Login successful! Redirecting...', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return;
+    }
+
+    // Show exact error from server
+    const detail = data.detail || data.message || `Server error (${res.status})`;
+    showMsg(detail, 'error');
+
+  } catch (err) {
+    // Show exact JS error
+    showMsg('Connection failed: ' + err.message + ' — Is the server running?', 'error');
+  } finally {
+    setLoading('loginBtn', false);
+  }
+}
+
+async function verify2FA() {
+  const code = document.getElementById('totpInput').value.trim();
+  if (!code) return showMsg('Please enter the 6-digit code', 'error');
+
+  hideMsg();
+  showMsg('Verifying...', 'info');
+
+  try {
+    const res = await fetch('/api/v1/auth/login', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ email: _2fa_email, password: _2fa_pass, totp_code: code }),
+    });
+
+    let data;
+    try { data = await res.json(); } catch(e) { data = {}; }
+
+    hideMsg();
+
+    if (res.ok && data.access_token) {
+      localStorage.setItem('access_token',  data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token || '');
+      if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+      showMsg('Login successful! Redirecting...', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    } else {
+      showMsg(data.detail || 'Invalid code', 'error');
+    }
+  } catch (err) {
+    showMsg('Connection failed: ' + err.message, 'error');
+  }
+}
+
+// Enter key
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const active = document.querySelector('.step.active').id;
+  if (active === 'stepLogin') doLogin();
+  else verify2FA();
+});
+
+// Auto-submit 2FA when 6 digits entered
+document.addEventListener('DOMContentLoaded', () => {
+  const t = document.getElementById('totpInput');
+  if (t) t.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '');
+    if (e.target.value.length === 6) verify2FA();
+  });
+});
+
+// Already logged in?
+if (localStorage.getItem('access_token')) window.location.href = '/';
+</script>
+</body>
+</html>

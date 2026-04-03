@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — MT4/MT5 Trading Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <style>
+    body {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.04) 0%, transparent 60%), var(--bg-base);
+    }
+    .wrap { width: 100%; max-width: 420px; padding: 20px; }
+
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo-mark {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 52px; height: 52px; background: var(--accent-bg);
+      border: 1px solid var(--accent-dim); border-radius: 14px; margin-bottom: 14px;
+    }
+    .logo-mark svg { color: var(--accent); }
+    .logo-title { font-size: 22px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+    .logo-sub   { font-size: 13px; color: var(--text-muted); }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 28px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+
+    .input-wrap { position: relative; }
+    .input-wrap .input { padding-left: 38px; width: 100%; }
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); pointer-events: none;
+    }
+    .show-pw {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0;
+    }
+    .show-pw:hover { color: var(--text-primary); }
+
+    .error-box {
+      background: var(--red-bg); border: 1px solid var(--red-dim);
+      color: var(--red); border-radius: var(--radius); padding: 10px 14px;
+      font-size: 13px; margin-bottom: 16px; display: none;
+    }
+    .error-box.show { display: block; }
+
+    .success-box {
+      background: var(--green-bg); border: 1px solid var(--green-dim);
+      color: var(--green); border-radius: var(--radius); padding: 10px 14px;
+      font-size: 13px; margin-bottom: 16px; display: none; text-align: center;
+    }
+    .success-box.show { display: block; }
+
+    .btn-register {
+      width: 100%; justify-content: center; margin-top: 8px;
+      padding: 11px; font-size: 14px;
+    }
+    .btn-register.loading .btn-text { display: none; }
+    .btn-register.loading .spinner { display: inline-block; }
+    .spinner {
+      display: none; width: 18px; height: 18px;
+      border: 2px solid rgba(0,0,0,0.2); border-top-color: #000;
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .pw-rules {
+      font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.6;
+    }
+    .pw-rule { display: flex; align-items: center; gap: 5px; }
+    .pw-rule .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .pw-rule.ok .dot { background: var(--green); }
+
+    .login-link {
+      text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 20px;
+    }
+    .login-link a { color: var(--accent); font-weight: 500; text-decoration: none; }
+    .login-link a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+    </div>
+    <div class="logo-title">Trading Dashboard</div>
+    <div class="logo-sub">Create your account</div>
+  </div>
+
+  <div class="card">
+    <div id="errorBox" class="error-box"></div>
+    <div id="successBox" class="success-box">
+      Account created! Redirecting to dashboard...
+    </div>
+
+    <!-- Display Name -->
+    <div class="form-group">
+      <label class="label">Your Name</label>
+      <div class="input-wrap">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <input type="text" id="nameInput" class="input" placeholder="Your name" autocomplete="name">
+      </div>
+    </div>
+
+    <!-- Email -->
+    <div class="form-group">
+      <label class="label">Email Address</label>
+      <div class="input-wrap">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+          <polyline points="22,6 12,13 2,6"></polyline>
+        </svg>
+        <input type="email" id="emailInput" class="input" placeholder="you@example.com" autocomplete="email">
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div class="form-group">
+      <label class="label">Password</label>
+      <div class="input-wrap">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <input type="password" id="passwordInput" class="input" placeholder="Min 8 chars" autocomplete="new-password"
+               oninput="checkPwRules(this.value)">
+        <button type="button" class="show-pw" onclick="togglePw()">
+          <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </div>
+      <!-- Password rules -->
+      <div class="pw-rules" id="pwRules">
+        <div class="pw-rule" id="rule-len"><div class="dot"></div>At least 8 characters</div>
+        <div class="pw-rule" id="rule-upper"><div class="dot"></div>One uppercase letter (A-Z)</div>
+        <div class="pw-rule" id="rule-num"><div class="dot"></div>One number (0-9)</div>
+        <div class="pw-rule" id="rule-special"><div class="dot"></div>One special character (!@#$%)</div>
+      </div>
+    </div>
+
+    <!-- Confirm Password -->
+    <div class="form-group">
+      <label class="label">Confirm Password</label>
+      <div class="input-wrap">
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <input type="password" id="confirmInput" class="input" placeholder="Re-enter password" autocomplete="new-password">
+      </div>
+    </div>
+
+    <button id="registerBtn" class="btn btn-primary btn-register" onclick="doRegister()">
+      <span class="btn-text">Create Account</span>
+      <span class="spinner"></span>
+    </button>
+  </div>
+
+  <div class="login-link">Already have an account? <a href="/static/login.html">Sign in</a></div>
+</div>
+
+<script>
+const API = '/api/v1/auth';
+
+function checkPwRules(pw) {
+  setRule('rule-len',     pw.length >= 8);
+  setRule('rule-upper',   /[A-Z]/.test(pw));
+  setRule('rule-num',     /[0-9]/.test(pw));
+  setRule('rule-special', /[^A-Za-z0-9]/.test(pw));
+}
+
+function setRule(id, ok) {
+  const el = document.getElementById(id);
+  if (ok) el.classList.add('ok');
+  else     el.classList.remove('ok');
+}
+
+function togglePw() {
+  const inp = document.getElementById('passwordInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function doRegister() {
+  const name     = document.getElementById('nameInput').value.trim();
+  const email    = document.getElementById('emailInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const confirm  = document.getElementById('confirmInput').value;
+
+  hideError();
+
+  if (!name)     return showError('Please enter your name');
+  if (!email)    return showError('Please enter your email address');
+  if (!password) return showError('Please enter a password');
+  if (password !== confirm) return showError('Passwords do not match');
+
+  // Client-side password check
+  if (password.length < 8)            return showError('Password must be at least 8 characters');
+  if (!/[A-Z]/.test(password))        return showError('Password must contain at least one uppercase letter');
+  if (!/[0-9]/.test(password))        return showError('Password must contain at least one number');
+  if (!/[^A-Za-z0-9]/.test(password)) return showError('Password must contain at least one special character (!@#$% etc)');
+
+  setLoading(true);
+
+  try {
+    const res = await fetch(`${API}/register`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        email:        email,
+        password:     password,
+        display_name: name,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.detail || 'Registration failed. Please try again.');
+      return;
+    }
+
+    // Save tokens
+    localStorage.setItem('access_token',  data.access_token);
+    localStorage.setItem('refresh_token', data.refresh_token);
+    if (data.user) localStorage.setItem('user', JSON.stringify(data.user));
+
+    // Show success and redirect
+    document.getElementById('successBox').classList.add('show');
+    setTimeout(() => { window.location.href = '/'; }, 1500);
+
+  } catch (e) {
+    showError('Network error — make sure the server is running');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+function setLoading(on) {
+  const btn = document.getElementById('registerBtn');
+  btn.classList.toggle('loading', on);
+  btn.disabled = on;
+}
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doRegister();
+});
+
+// Redirect if already logged in
+if (localStorage.getItem('access_token')) {
+  window.location.href = '/';
+}
+</script>
+</body>
+</html>

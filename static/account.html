@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Detail — MT4/MT5 Trading Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+
+  <!-- Chart.js + Lightweight Charts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
+
+  <style>
+    /* ── Account Page Specific Styles ─────────────────────────────────────── */
+    .page-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 0 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .account-avatar {
+      width: 44px; height: 44px; border-radius: var(--radius-lg);
+      background: var(--accent-bg); border: 1px solid var(--accent-dim);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: var(--accent);
+      font-family: var(--font-mono); flex-shrink: 0;
+    }
+    .account-header-info { flex: 1; min-width: 0; }
+    .account-header-name { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .account-header-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .account-header-meta span { display: flex; align-items: center; gap: 4px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .status-badge.live    { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+    .status-badge.offline { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-dim); }
+    .status-badge.warning { background: var(--yellow-bg);color: var(--yellow);border: 1px solid var(--yellow); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .live .status-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+
+    /* Period selector */
+    .period-bar {
+      display: flex; gap: 4px; padding: 3px; background: var(--bg-elevated);
+      border-radius: var(--radius); width: fit-content;
+    }
+    .period-btn {
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
+      color: var(--text-muted); cursor: pointer; border: none; background: none;
+      transition: var(--transition);
+    }
+    .period-btn:hover  { color: var(--text-primary); }
+    .period-btn.active { background: var(--bg-card); color: var(--accent); }
+
+    /* Metrics grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px; margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px 16px;
+      transition: border-color 0.15s;
+    }
+    .metric-card:hover { border-color: var(--border-light); }
+    .metric-card.accent { border-color: var(--accent-dim); background: var(--accent-bg); }
+    .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+    .metric-value { font-size: 20px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); line-height: 1; }
+    .metric-value.positive { color: var(--green); }
+    .metric-value.negative { color: var(--red); }
+    .metric-sub { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+    /* Chart cards */
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px; }
+    .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .chart-title  { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .chart-sub    { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .chart-area   { height: 220px; position: relative; }
+    .equity-chart-area { height: 280px; position: relative; }
+
+    /* Full-width chart */
+    .chart-full { grid-column: 1 / -1; }
+
+    /* Tabs */
+    .tab-group { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+    .tab-item {
+      padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-muted);
+      cursor: pointer; border-bottom: 2px solid transparent; transition: var(--transition);
+      margin-bottom: -1px;
+    }
+    .tab-item:hover  { color: var(--text-primary); }
+    .tab-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Positions table */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .data-table th {
+      padding: 10px 12px; text-align: left; color: var(--text-muted);
+      font-weight: 500; border-bottom: 1px solid var(--border);
+      white-space: nowrap; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg-hover); }
+    .data-table .mono { font-family: var(--font-mono); font-size: 12px; }
+    .badge { display: inline-flex; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-buy  { background: var(--green-bg); color: var(--green); }
+    .badge-sell { background: var(--red-bg);   color: var(--red); }
+
+    /* Risk gauge */
+    .risk-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    @media (max-width: 700px) { .risk-section { grid-template-columns: 1fr; } }
+    .risk-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px; }
+    .risk-card-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+    .gauge-wrap { position: relative; width: 120px; height: 60px; margin: 0 auto 12px; }
+    .gauge-label { text-align: center; font-size: 22px; font-weight: 700; font-family: var(--font-mono); }
+    .gauge-sub   { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+    /* Progress bars */
+    .progress-bar { height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+    .fill-green  { background: var(--green); }
+    .fill-yellow { background: var(--yellow); }
+    .fill-red    { background: var(--red); }
+
+    /* Filter row */
+    .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .filter-row .input { height: 34px; font-size: 12.5px; padding: 0 10px; }
+    .filter-row .select { height: 34px; font-size: 12.5px; }
+    .result-count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    /* Paginator */
+    .paginator { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
+    .paginator-info { font-size: 12px; color: var(--text-muted); }
+    .paginator-btns { display: flex; gap: 4px; }
+    .paginator-btn {
+      width: 32px; height: 32px; border-radius: var(--radius); border: 1px solid var(--border);
+      background: var(--bg-elevated); color: var(--text-secondary); font-size: 12px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: var(--transition);
+    }
+    .paginator-btn:hover  { border-color: var(--accent-dim); color: var(--accent); }
+    .paginator-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    .paginator-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Settings card */
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .settings-grid { grid-template-columns: 1fr; } }
+    .settings-section { margin-bottom: 28px; }
+    .settings-section-title {
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 14px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .api-key-box {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 10px 14px;
+      font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);
+      word-break: break-all; margin-bottom: 10px;
+    }
+
+    /* Monthly heatmap */
+    .heatmap-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+    .heatmap-cell {
+      aspect-ratio: 1; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-family: var(--font-mono); font-weight: 600; cursor: default;
+      transition: transform 0.1s;
+    }
+    .heatmap-cell:hover { transform: scale(1.1); }
+    .hm-months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin-bottom: 4px; }
+    .hm-month-label { font-size: 9px; color: var(--text-muted); text-align: center; }
+    .hm-year-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+
+    /* Symbol breakdown bars */
+    .symbol-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .symbol-name { width: 60px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+    .symbol-bar-wrap { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; }
+    .symbol-bar { height: 100%; border-radius: 3px; }
+    .symbol-pnl { width: 70px; text-align: right; font-family: var(--font-mono); font-size: 11px; }
+
+    /* Overflow scroll containers */
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+<div id="app" x-data="accountPage()" x-init="init()" class="app-layout">
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- SIDEBAR                                                               -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+        <polyline points="16 7 22 7 22 13"></polyline>
+      </svg>
+      <span>TradeDash</span>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Navigation</div>
+      <a href="/" class="sidebar-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Portfolio Overview
+      </a>
+      <a href="#" class="sidebar-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Account Detail
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Account</div>
+      <a href="#" class="sidebar-item" @click.prevent="activeTab='positions'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg>
+        Open Positions
+        <span class="badge badge-buy" x-text="openPositions.length" style="margin-left:auto"></span>
+      </a>
+      <a href="#" class="sidebar-item" @click.prevent="activeTab='history'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Trade History
+      </a>
+      <a href="#" class="sidebar-item" @click.prevent="activeTab='analytics'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Analytics
+      </a>
+      <a href="#" class="sidebar-item" @click.prevent="activeTab='risk'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Risk Metrics
+      </a>
+      <a href="#" class="sidebar-item" @click.prevent="activeTab='settings'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </a>
+    </div>
+
+    <!-- Sidebar account card -->
+    <div style="margin-top:auto; padding:12px; border-top:1px solid var(--border)">
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px">Logged in as</div>
+      <div style="font-size:13px; color:var(--text-primary); font-weight:500" x-text="user?.email || '—'"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%" @click="logout()">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- MAIN CONTENT                                                          -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content" style="padding:20px 28px">
+
+    <!-- Loading state -->
+    <template x-if="loading">
+      <div style="display:flex;align-items:center;justify-content:center;height:400px;flex-direction:column;gap:12px">
+        <div class="spinner" style="width:32px;height:32px;border-width:3px"></div>
+        <div style="font-size:13px;color:var(--text-muted)">Loading account data…</div>
+      </div>
+    </template>
+
+    <template x-if="!loading && account">
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="account-avatar" x-text="account.account_number?.slice(-3)"></div>
+        <div class="account-header-info">
+          <div class="account-header-name" x-text="account.label || account.account_number"></div>
+          <div class="account-header-meta">
+            <span>#<span x-text="account.account_number"></span></span>
+            <span x-text="account.broker_name"></span>
+            <span x-text="account.server_name"></span>
+            <span x-text="account.account_type"></span>
+          </div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span class="status-badge"
+                :class="account.status === 'live' ? 'live' : account.status === 'warning' ? 'warning' : 'offline'">
+            <span class="status-dot"></span>
+            <span x-text="account.status?.toUpperCase()"></span>
+          </span>
+          <div class="period-bar">
+            <template x-for="p in periods">
+              <button class="period-btn" :class="{active: period===p}" x-text="p" @click="changePeriod(p)"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KEY METRICS GRID ─────────────────────────────────────────── -->
+      <div class="metrics-grid" x-show="!loading">
+
+        <div class="metric-card accent">
+          <div class="metric-label">Balance</div>
+          <div class="metric-value" x-text="fmt(stats?.balance, 'currency')"></div>
+          <div class="metric-sub" x-text="account.currency"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Equity</div>
+          <div class="metric-value" x-text="fmt(stats?.equity, 'currency')"></div>
+          <div class="metric-sub" x-text="'Float: ' + fmt(stats?.floating_pl, 'pl')"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Today's P/L</div>
+          <div class="metric-value" :class="colorCls(stats?.profit_today_dollar)" x-text="fmt(stats?.profit_today_dollar, 'pl')"></div>
+          <div class="metric-sub" :class="colorCls(stats?.profit_today_pct)" x-text="fmt(stats?.profit_today_pct, 'pct')"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Net P/L</div>
+          <div class="metric-value" :class="colorCls(stats?.net_profit)" x-text="fmt(stats?.net_profit, 'pl')"></div>
+          <div class="metric-sub" :class="colorCls(stats?.growth_pct)" x-text="fmt(stats?.growth_pct, 'pct')"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Win Rate</div>
+          <div class="metric-value" x-text="fmt(stats?.win_rate, 'pct2')"></div>
+          <div class="metric-sub" x-text="(stats?.total_trades || 0) + ' trades'"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Profit Factor</div>
+          <div class="metric-value" x-text="(stats?.profit_factor || 0).toFixed(2)"></div>
+          <div class="metric-sub">Gross W / Gross L</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Max Drawdown</div>
+          <div class="metric-value negative" x-text="fmt(stats?.max_drawdown_pct, 'pct2')"></div>
+          <div class="metric-sub" x-text="fmt(stats?.max_drawdown_dollar, 'currency')"></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Sharpe Ratio</div>
+          <div class="metric-value" :class="(stats?.sharpe||0) >= 1 ? 'positive' : (stats?.sharpe||0) >= 0 ? '' : 'negative'" x-text="(stats?.sharpe || 0).toFixed(2)"></div>
+          <div class="metric-sub">Annualised</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Expectancy</div>
+          <div class="metric-value" :class="colorCls(stats?.expectancy)" x-text="fmt(stats?.expectancy, 'currency')"></div>
+          <div class="metric-sub">Per trade</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Avg Hold Time</div>
+          <div class="metric-value" x-text="fmtDur(stats?.avg_hold_time_min)"></div>
+          <div class="metric-sub">Closed trades</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Recovery Factor</div>
+          <div class="metric-value" x-text="(stats?.recovery_factor || 0).toFixed(2)"></div>
+          <div class="metric-sub">Net P/L ÷ Max DD</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Kelly %</div>
+          <div class="metric-value" x-text="fmt(stats?.kelly_pct, 'pct2')"></div>
+          <div class="metric-sub">Optimal risk</div>
+        </div>
+      </div>
+
+      <!-- ── TAB NAVIGATION ──────────────────────────────────────────── -->
+      <div class="tab-group">
+        <div class="tab-item" :class="{active:activeTab==='overview'}"   @click="activeTab='overview'">Overview</div>
+        <div class="tab-item" :class="{active:activeTab==='positions'}"  @click="activeTab='positions'">Open Positions</div>
+        <div class="tab-item" :class="{active:activeTab==='history'}"    @click="activeTab='history'">Trade History</div>
+        <div class="tab-item" :class="{active:activeTab==='analytics'}"  @click="activeTab='analytics'">Analytics</div>
+        <div class="tab-item" :class="{active:activeTab==='risk'}"       @click="activeTab='risk'">Risk</div>
+        <div class="tab-item" :class="{active:activeTab==='settings'}"   @click="activeTab='settings'">Settings</div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: OVERVIEW                                                   -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='overview'">
+        <!-- Equity Curve (full width) -->
+        <div class="chart-card" style="margin-bottom:16px">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Equity Curve</div>
+              <div class="chart-sub" x-text="'Balance vs Equity — ' + period"></div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-muted)">
+              <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:2px;background:var(--accent);display:inline-block;border-radius:1px"></span>Equity</span>
+              <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:2px;background:var(--blue);display:inline-block;border-radius:1px;opacity:0.6"></span>Balance</span>
+            </div>
+          </div>
+          <div class="equity-chart-area">
+            <canvas id="equityChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Daily P/L + Symbol Breakdown -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">Daily P/L</div>
+                <div class="chart-sub">Per-day realized profit</div>
+              </div>
+            </div>
+            <div class="chart-area"><canvas id="dailyPLChart"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">Symbol Breakdown</div>
+                <div class="chart-sub">P/L by instrument</div>
+              </div>
+            </div>
+            <div class="chart-area" id="symbolBreakdownContainer" style="overflow-y:auto;padding-right:4px">
+              <template x-if="symbolData.length === 0">
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:12px">No data for period</div>
+              </template>
+              <template x-for="sym in symbolData.slice(0,12)">
+                <div class="symbol-row">
+                  <div class="symbol-name" x-text="sym.symbol"></div>
+                  <div class="symbol-bar-wrap">
+                    <div class="symbol-bar" :style="`width:${sym.pct}%;background:${sym.profit>=0?'var(--green)':'var(--red)'};opacity:0.8`"></div>
+                  </div>
+                  <div class="symbol-pnl" :class="colorCls(sym.profit)" x-text="fmt(sym.profit, 'pl')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Open Positions summary -->
+        <div class="chart-card" style="margin-bottom:16px" x-show="openPositions.length > 0">
+          <div class="chart-header">
+            <div class="chart-title">Open Positions (<span x-text="openPositions.length"></span>)</div>
+            <span style="font-family:var(--font-mono);font-size:13px;font-weight:600"
+                  :class="colorCls(totalFloatingPL)" x-text="fmt(totalFloatingPL,'pl')"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th><th>Type</th><th>Lots</th><th>Open Price</th>
+                  <th>Current</th><th>Swap</th><th>P/L</th><th>MAE</th><th>MFE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="pos in openPositions">
+                  <tr>
+                    <td style="font-weight:600;color:var(--text-primary)" x-text="pos.symbol"></td>
+                    <td><span class="badge" :class="pos.trade_type==='buy'?'badge-buy':'badge-sell'" x-text="pos.trade_type?.toUpperCase()"></span></td>
+                    <td class="mono" x-text="pos.lots?.toFixed(2)"></td>
+                    <td class="mono" x-text="pos.open_price?.toFixed(5)"></td>
+                    <td class="mono" x-text="pos.current_price?.toFixed(5)"></td>
+                    <td class="mono" :class="colorCls(pos.swap)" x-text="fmt(pos.swap,'currency')"></td>
+                    <td class="mono" :class="colorCls(pos.profit)" x-text="fmt(pos.profit,'pl')"></td>
+                    <td class="mono negative" x-text="fmt(pos.mae,'currency')"></td>
+                    <td class="mono positive" x-text="fmt(pos.mfe,'currency')"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: OPEN POSITIONS                                            -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='positions'">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Open Positions</div>
+              <div class="chart-sub">
+                <span x-text="openPositions.length"></span> positions — Float:
+                <span :class="colorCls(totalFloatingPL)" x-text="fmt(totalFloatingPL,'pl')"></span>
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="loadPositions()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div class="table-wrap" x-show="openPositions.length > 0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Ticket</th><th>Symbol</th><th>Type</th><th>Lots</th>
+                  <th>Open Price</th><th>SL</th><th>TP</th><th>Current</th>
+                  <th>Swap</th><th>Commission</th><th>P/L</th><th>Open Time</th>
+                  <th>MAE</th><th>MFE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="pos in openPositions">
+                  <tr>
+                    <td class="mono" x-text="pos.ticket"></td>
+                    <td style="font-weight:600;color:var(--text-primary)" x-text="pos.symbol"></td>
+                    <td><span class="badge" :class="pos.trade_type==='buy'?'badge-buy':'badge-sell'" x-text="pos.trade_type?.toUpperCase()"></span></td>
+                    <td class="mono" x-text="pos.lots?.toFixed(2)"></td>
+                    <td class="mono" x-text="pos.open_price?.toFixed(5)"></td>
+                    <td class="mono" x-text="pos.stop_loss ? pos.stop_loss.toFixed(5) : '—'"></td>
+                    <td class="mono" x-text="pos.take_profit ? pos.take_profit.toFixed(5) : '—'"></td>
+                    <td class="mono" x-text="pos.current_price?.toFixed(5)"></td>
+                    <td class="mono" :class="colorCls(pos.swap)" x-text="fmt(pos.swap,'currency')"></td>
+                    <td class="mono" x-text="fmt(pos.commission,'currency')"></td>
+                    <td class="mono" :class="colorCls(pos.profit)" x-text="fmt(pos.profit,'pl')"></td>
+                    <td style="font-size:11px;color:var(--text-muted)" x-text="fmtDate(pos.open_time)"></td>
+                    <td class="mono negative" x-text="pos.mae != null ? fmt(pos.mae,'currency') : '—'"></td>
+                    <td class="mono positive" x-text="pos.mfe != null ? fmt(pos.mfe,'currency') : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <div x-show="openPositions.length === 0" style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">
+            No open positions
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: TRADE HISTORY                                             -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='history'">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Closed Trade History</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" @click="exportCSV()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="filter-row">
+            <input class="input" placeholder="Symbol…" x-model="histFilter.symbol" @input.debounce.300="loadHistory()">
+            <select class="input select" x-model="histFilter.direction" @change="loadHistory()" style="width:110px">
+              <option value="">All</option>
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+            <input type="date" class="input" x-model="histFilter.date_from" @change="loadHistory()">
+            <input type="date" class="input" x-model="histFilter.date_to" @change="loadHistory()">
+            <select class="input select" x-model="histFilter.result" @change="loadHistory()" style="width:100px">
+              <option value="">All</option>
+              <option value="win">Winners</option>
+              <option value="loss">Losers</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" @click="resetHistFilter()">Clear</button>
+            <span class="result-count" x-text="histTotal + ' trades'"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Ticket</th><th>Symbol</th><th>Type</th><th>Lots</th>
+                  <th>Open Price</th><th>Close Price</th><th>SL</th><th>TP</th>
+                  <th>Swap</th><th>Commission</th><th>Net P/L</th>
+                  <th>Open Time</th><th>Close Time</th><th>Duration</th>
+                  <th>MAE</th><th>MFE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="t in histTrades">
+                  <tr>
+                    <td class="mono" x-text="t.ticket"></td>
+                    <td style="font-weight:600;color:var(--text-primary)" x-text="t.symbol"></td>
+                    <td><span class="badge" :class="t.trade_type==='buy'?'badge-buy':'badge-sell'" x-text="t.trade_type?.toUpperCase()"></span></td>
+                    <td class="mono" x-text="t.lots?.toFixed(2)"></td>
+                    <td class="mono" x-text="t.open_price?.toFixed(5)"></td>
+                    <td class="mono" x-text="t.close_price?.toFixed(5)"></td>
+                    <td class="mono" x-text="t.stop_loss ? t.stop_loss.toFixed(5) : '—'"></td>
+                    <td class="mono" x-text="t.take_profit ? t.take_profit.toFixed(5) : '—'"></td>
+                    <td class="mono" :class="colorCls(t.swap)" x-text="fmt(t.swap,'currency')"></td>
+                    <td class="mono" x-text="fmt(t.commission,'currency')"></td>
+                    <td class="mono" :class="colorCls(t.net_profit)" x-text="fmt(t.net_profit,'pl')"></td>
+                    <td style="font-size:11px;color:var(--text-muted)" x-text="fmtDate(t.open_time)"></td>
+                    <td style="font-size:11px;color:var(--text-muted)" x-text="fmtDate(t.close_time)"></td>
+                    <td style="font-size:11px;color:var(--text-muted)" x-text="fmtDur(t.hold_time_min)"></td>
+                    <td class="mono negative" x-text="t.mae != null ? fmt(t.mae,'currency') : '—'"></td>
+                    <td class="mono positive" x-text="t.mfe != null ? fmt(t.mfe,'currency') : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div class="paginator">
+            <div class="paginator-info" x-text="`Page ${histPage} of ${histTotalPages} — ${histTotal} records`"></div>
+            <div class="paginator-btns">
+              <button class="paginator-btn" :disabled="histPage<=1" @click="histPage--;loadHistory()">‹</button>
+              <template x-for="p in histPageRange()">
+                <button class="paginator-btn" :class="{active:histPage===p}" @click="histPage=p;loadHistory()" x-text="p"></button>
+              </template>
+              <button class="paginator-btn" :disabled="histPage>=histTotalPages" @click="histPage++;loadHistory()">›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: ANALYTICS                                                 -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='analytics'">
+        <div class="chart-grid">
+
+          <!-- Monthly Returns Heatmap -->
+          <div class="chart-card chart-full">
+            <div class="chart-header">
+              <div class="chart-title">Monthly Returns Heatmap</div>
+              <div class="chart-sub">% return per month</div>
+            </div>
+            <div id="heatmapContainer">
+              <template x-if="monthlyReturns.length === 0">
+                <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:30px">No data</div>
+              </template>
+              <template x-for="row in monthlyReturns">
+                <div style="margin-bottom:10px">
+                  <div class="hm-year-label" x-text="row.year"></div>
+                  <div class="hm-months">
+                    <template x-for="m in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']">
+                      <div class="hm-month-label" x-text="m"></div>
+                    </template>
+                  </div>
+                  <div class="heatmap-grid">
+                    <template x-for="cell in row.months">
+                      <div class="heatmap-cell"
+                           :title="cell.month + ': ' + (cell.return_pct?.toFixed(2)||'n/a') + '%'"
+                           :style="`background:${heatColor(cell.return_pct)};color:${Math.abs(cell.return_pct||0)>3?'rgba(255,255,255,0.9)':'transparent'}`"
+                           x-text="cell.return_pct != null ? cell.return_pct.toFixed(1)+'%' : ''">
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Hourly Heatmap -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Trading Hour Activity</div>
+              <div class="chart-sub">Avg P/L by hour (UTC)</div>
+            </div>
+            <div class="chart-area"><canvas id="hourlyHeatmapChart"></canvas></div>
+          </div>
+
+          <!-- Profit Distribution -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">P/L Distribution</div>
+              <div class="chart-sub">Trade result buckets</div>
+            </div>
+            <div class="chart-area"><canvas id="distChart"></canvas></div>
+          </div>
+
+          <!-- Duration Distribution -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Hold Time Distribution</div>
+              <div class="chart-sub">Trade duration buckets</div>
+            </div>
+            <div class="chart-area"><canvas id="durChart"></canvas></div>
+          </div>
+
+          <!-- Direction stats -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Buy vs Sell Analysis</div>
+              <div class="chart-sub">P/L by direction</div>
+            </div>
+            <div x-show="dirStats">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">BUY Trades</div>
+                  <div style="font-size:20px;font-weight:700;font-family:var(--font-mono)" :class="colorCls(dirStats?.buy?.net_profit)" x-text="fmt(dirStats?.buy?.net_profit,'pl')"></div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px" x-text="(dirStats?.buy?.total||0) + ' trades · ' + (dirStats?.buy?.win_rate||0).toFixed(1) + '% WR'"></div>
+                </div>
+                <div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">SELL Trades</div>
+                  <div style="font-size:20px;font-weight:700;font-family:var(--font-mono)" :class="colorCls(dirStats?.sell?.net_profit)" x-text="fmt(dirStats?.sell?.net_profit,'pl')"></div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px" x-text="(dirStats?.sell?.total||0) + ' trades · ' + (dirStats?.sell?.win_rate||0).toFixed(1) + '% WR'"></div>
+                </div>
+              </div>
+              <div class="chart-area" style="height:160px"><canvas id="dirChart"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Rolling metrics -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Rolling 30-Day Sharpe</div>
+              <div class="chart-sub">Risk-adjusted return over time</div>
+            </div>
+            <div class="chart-area"><canvas id="rollingChart"></canvas></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: RISK                                                      -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='risk'">
+        <!-- Risk gauges row -->
+        <div class="risk-section">
+          <div class="risk-card">
+            <div class="risk-card-title">Max Drawdown</div>
+            <div class="gauge-label" :class="colorCls(-(stats?.max_drawdown_pct||0))" x-text="(stats?.max_drawdown_pct||0).toFixed(2)+'%'"></div>
+            <div class="gauge-sub">Peak-to-trough decline</div>
+            <div class="progress-bar" style="margin-top:12px">
+              <div class="progress-fill" :class="(stats?.max_drawdown_pct||0)>20?'fill-red':(stats?.max_drawdown_pct||0)>10?'fill-yellow':'fill-green'"
+                   :style="`width:${Math.min(stats?.max_drawdown_pct||0,100)}%`"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:12px">
+              <div>
+                <div style="color:var(--text-muted)">Absolute ($)</div>
+                <div class="mono" x-text="fmt(stats?.max_drawdown_dollar,'currency')"></div>
+              </div>
+              <div>
+                <div style="color:var(--text-muted)">Daily Max (%)</div>
+                <div class="mono" x-text="(stats?.daily_max_dd_pct||0).toFixed(2)+'%'"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="risk-card">
+            <div class="risk-card-title">Value at Risk (95%)</div>
+            <div class="gauge-label negative" x-text="fmt(stats?.var_95,'currency')"></div>
+            <div class="gauge-sub">Daily 95% confidence</div>
+            <div style="margin-top:16px;font-size:12px;display:grid;gap:8px">
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">VaR as % Balance</span>
+                <span class="mono negative" x-text="stats?.balance ? ((Math.abs(stats?.var_95||0)/stats.balance)*100).toFixed(2)+'%' : '—'"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Sortino Ratio</span>
+                <span class="mono" :class="(stats?.sortino||0)>=1?'positive':(stats?.sortino||0)>=0?'':'negative'" x-text="(stats?.sortino||0).toFixed(2)"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Calmar Ratio</span>
+                <span class="mono" :class="(stats?.calmar||0)>=1?'positive':(stats?.calmar||0)>=0?'':'negative'" x-text="(stats?.calmar||0).toFixed(2)"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="risk-card">
+            <div class="risk-card-title">Streak Analysis</div>
+            <div style="font-size:12px;display:grid;gap:8px;margin-top:4px">
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Best Win Streak</span>
+                <span class="mono positive" x-text="stats?.max_win_streak||0"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Worst Loss Streak</span>
+                <span class="mono negative" x-text="stats?.max_loss_streak||0"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Largest Win</span>
+                <span class="mono positive" x-text="fmt(stats?.largest_win,'currency')"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Largest Loss</span>
+                <span class="mono negative" x-text="fmt(stats?.largest_loss,'currency')"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Avg Win</span>
+                <span class="mono positive" x-text="fmt(stats?.avg_win,'currency')"></span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-muted)">Avg Loss</span>
+                <span class="mono negative" x-text="fmt(stats?.avg_loss,'currency')"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MAE/MFE scatter -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">MAE / MFE Analysis</div>
+              <div class="chart-sub">Maximum Adverse/Favorable Excursion</div>
+            </div>
+            <div class="chart-area"><canvas id="maeMfeChart"></canvas></div>
+          </div>
+
+          <!-- Currency Exposure -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">Currency Exposure</div>
+              <div class="chart-sub">Current open position exposure</div>
+            </div>
+            <div x-show="currencyExposure.length > 0">
+              <template x-for="ex in currencyExposure">
+                <div class="symbol-row" style="margin-bottom:10px">
+                  <div class="symbol-name" x-text="ex.currency"></div>
+                  <div class="symbol-bar-wrap">
+                    <div class="symbol-bar" :style="`width:${ex.pct}%;background:${ex.net_lots>=0?'var(--green)':'var(--red)'};opacity:0.7`"></div>
+                  </div>
+                  <div class="symbol-pnl" :class="ex.net_lots>=0?'positive':'negative'" x-text="(ex.net_lots>=0?'+':'')+ex.net_lots.toFixed(2)+' lots'"></div>
+                </div>
+              </template>
+            </div>
+            <div x-show="currencyExposure.length===0" style="color:var(--text-muted);font-size:12px;text-align:center;padding:30px">
+              No open positions
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- TAB: SETTINGS                                                  -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div x-show="activeTab==='settings'" x-data="accountSettings()">
+        <div class="chart-card">
+          <div class="chart-header"><div class="chart-title">Account Settings</div></div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Display</div>
+            <div class="settings-grid">
+              <div class="form-group">
+                <label class="label">Account Label</label>
+                <input class="input" x-model="form.label" placeholder="e.g. My Prop Account">
+              </div>
+              <div class="form-group">
+                <label class="label">Broker Name</label>
+                <input class="input" x-model="form.broker_name" placeholder="e.g. FTMO">
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">EA Push Settings</div>
+            <div class="settings-grid">
+              <div class="form-group">
+                <label class="label">Push Interval (seconds)</label>
+                <input class="input" type="number" x-model.number="form.push_interval_sec" min="1" max="60">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">How often the EA sends data (recommended: 5s)</div>
+              </div>
+              <div class="form-group">
+                <label class="label">Heartbeat Timeout (seconds)</label>
+                <input class="input" type="number" x-model.number="form.heartbeat_timeout_sec" min="10" max="300">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Mark offline if no push received within this time</div>
+              </div>
+            </div>
+            <button class="btn btn-primary" @click="saveSettings()">Save Settings</button>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">EA API Key</div>
+            <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:12px">
+              This key is used in the EA's configuration to authenticate pushes to this dashboard.
+              Keep it secret — it grants write access to this account's data.
+            </div>
+            <div x-show="apiKey" class="api-key-box" x-text="apiKey"></div>
+            <div x-show="!apiKey" class="api-key-box" style="color:var(--text-muted)">Key hidden for security — generate a new one if needed</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-primary" @click="generateApiKey()">Generate New Key</button>
+              <button class="btn btn-ghost" @click="copyToClipboard(apiKey)" x-show="apiKey">Copy Key</button>
+              <button class="btn btn-danger" @click="revokeApiKey()">Revoke Key</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Deposits & Withdrawals</div>
+            <div style="margin-bottom:12px">
+              <button class="btn btn-secondary btn-sm" @click="showDepositForm=!showDepositForm">+ Add Transaction</button>
+            </div>
+            <div x-show="showDepositForm" class="chart-card" style="margin-bottom:14px;background:var(--bg-elevated)">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+                <div class="form-group">
+                  <label class="label">Type</label>
+                  <select class="input select" x-model="depositForm.type">
+                    <option value="deposit">Deposit</option>
+                    <option value="withdrawal">Withdrawal</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="label">Amount ($)</label>
+                  <input class="input" type="number" x-model.number="depositForm.amount" placeholder="1000.00">
+                </div>
+                <div class="form-group">
+                  <label class="label">Date</label>
+                  <input class="input" type="date" x-model="depositForm.tx_date">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="label">Note (optional)</label>
+                <input class="input" x-model="depositForm.note" placeholder="e.g. Initial deposit">
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" @click="addDeposit()">Save</button>
+                <button class="btn btn-ghost" @click="showDepositForm=false">Cancel</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+                <tbody>
+                  <template x-for="d in deposits">
+                    <tr>
+                      <td x-text="fmtDate(d.tx_date)"></td>
+                      <td><span class="badge" :class="d.amount>=0?'badge-buy':'badge-sell'" x-text="d.amount>=0?'DEPOSIT':'WITHDRAWAL'"></span></td>
+                      <td class="mono" :class="colorCls(d.amount)" x-text="fmt(d.amount,'pl')"></td>
+                      <td style="color:var(--text-muted)" x-text="d.note || '—'"></td>
+                    </tr>
+                  </template>
+                  <template x-if="deposits.length===0">
+                    <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No transactions recorded</td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </template><!-- end x-if account -->
+  </main>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="/static/js/websocket.js"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/dashboard.js"></script>
+
+<script>
+// =============================================================================
+// account.html — Alpine.js page component
+// =============================================================================
+
+document.addEventListener('alpine:init', () => {
+  Alpine.data('accountPage', () => ({
+    accountId: null,
+    account:   null,
+    stats:     null,
+    loading:   true,
+    activeTab: 'overview',
+    period:    '1M',
+    periods:   ['Today','1W','1M','3M','6M','1Y','All'],
+    user:      JSON.parse(localStorage.getItem('user') || 'null'),
+
+    // Data
+    openPositions:   [],
+    histTrades:      [],
+    histPage:        1,
+    histLimit:       50,
+    histTotal:       0,
+    histTotalPages:  1,
+    histFilter:      { symbol:'', direction:'', date_from:'', date_to:'', result:'' },
+    symbolData:      [],
+    monthlyReturns:  [],
+    dirStats:        null,
+    currencyExposure:[],
+    equityCurve:     [],
+    dailyPL:         [],
+    distribution:    [],
+    durationDist:    [],
+    rollingData:     [],
+    maeMfe:          [],
+    hourlyData:      [],
+
+    // Charts
+    _charts: {},
+
+    get totalFloatingPL() {
+      return this.openPositions.reduce((s,p) => s + (p.profit||0), 0);
+    },
+
+    async init() {
+      if (!localStorage.getItem('access_token')) {
+        window.location.href = '/static/login.html'; return;
+      }
+
+      // Get account ID from URL
+      const params = new URLSearchParams(window.location.search);
+      this.accountId = params.get('id');
+      if (!this.accountId) { window.location.href = '/'; return; }
+
+      toast.init();
+      await this.loadAll();
+      this.connectWS();
+    },
+
+    async loadAll() {
+      this.loading = true;
+      try {
+        await Promise.all([
+          this.loadAccount(),
+          this.loadStats(),
+          this.loadPositions(),
+        ]);
+        await Promise.all([
+          this.loadHistory(),
+          this.loadEquityCurve(),
+          this.loadDailyPL(),
+          this.loadSymbols(),
+          this.loadMonthly(),
+          this.loadDirection(),
+          this.loadCurrencyExposure(),
+          this.loadDistribution(),
+          this.loadDurationDist(),
+          this.loadRolling(),
+          this.loadMaeMfe(),
+          this.loadHourly(),
+        ]);
+        this.$nextTick(() => this.renderCharts());
+      } catch(e) {
+        toast.error('Failed to load account: ' + e.message);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadAccount() {
+      this.account = await api.get(`/accounts/${this.accountId}`);
+    },
+
+    async loadStats() {
+      this.stats = await api.get(`/stats/${this.accountId}/summary?period=${this.period}`);
+    },
+
+    async loadPositions() {
+      const data = await api.get(`/trades/open/${this.accountId}`);
+      this.openPositions = data.positions || data || [];
+    },
+
+    async loadHistory() {
+      const p = this.histFilter;
+      const qs = new URLSearchParams({
+        page:      this.histPage,
+        limit:     this.histLimit,
+        ...(p.symbol    && { symbol: p.symbol }),
+        ...(p.direction && { direction: p.direction }),
+        ...(p.date_from && { date_from: p.date_from }),
+        ...(p.date_to   && { date_to: p.date_to }),
+        ...(p.result    && { result: p.result }),
+      });
+      const data = await api.get(`/trades/history/${this.accountId}?${qs}`);
+      this.histTrades     = data.trades || [];
+      this.histTotal      = data.total || 0;
+      this.histTotalPages = Math.max(1, Math.ceil(this.histTotal / this.histLimit));
+    },
+
+    async loadEquityCurve() {
+      const data = await api.get(`/stats/${this.accountId}/equity-curve?period=${this.period}`);
+      this.equityCurve = data.data || data || [];
+    },
+
+    async loadDailyPL() {
+      const data = await api.get(`/stats/${this.accountId}/daily-pl?period=${this.period}`);
+      this.dailyPL = data.data || data || [];
+    },
+
+    async loadSymbols() {
+      const data = await api.get(`/stats/${this.accountId}/symbols?period=${this.period}`);
+      const raw = data.symbols || data || [];
+      const max = Math.max(...raw.map(s=>Math.abs(s.profit||0)), 1);
+      this.symbolData = raw.map(s=>({...s, pct: Math.abs(s.profit||0)/max*100}));
+    },
+
+    async loadMonthly() {
+      const data = await api.get(`/stats/${this.accountId}/heatmap/monthly`);
+      this.monthlyReturns = data.years || data || [];
+    },
+
+    async loadDirection() {
+      this.dirStats = await api.get(`/stats/${this.accountId}/direction?period=${this.period}`);
+    },
+
+    async loadCurrencyExposure() {
+      const data = await api.get(`/stats/${this.accountId}/currency-exposure`);
+      const raw = data.currencies || data || [];
+      const max = Math.max(...raw.map(c=>Math.abs(c.net_lots||0)), 1);
+      this.currencyExposure = raw.map(c=>({...c, pct: Math.abs(c.net_lots||0)/max*100}));
+    },
+
+    async loadDistribution() {
+      const data = await api.get(`/stats/${this.accountId}/distribution/profit?period=${this.period}`);
+      this.distribution = data.buckets || data || [];
+    },
+
+    async loadDurationDist() {
+      const data = await api.get(`/stats/${this.accountId}/distribution/duration?period=${this.period}`);
+      this.durationDist = data.buckets || data || [];
+    },
+
+    async loadRolling() {
+      const data = await api.get(`/stats/${this.accountId}/rolling?period=${this.period}`);
+      this.rollingData = data.data || data || [];
+    },
+
+    async loadMaeMfe() {
+      const data = await api.get(`/stats/${this.accountId}/mae-mfe?period=${this.period}`);
+      this.maeMfe = data.trades || data || [];
+    },
+
+    async loadHourly() {
+      const data = await api.get(`/stats/${this.accountId}/heatmap/hourly`);
+      this.hourlyData = data.hours || data || [];
+    },
+
+    async changePeriod(p) {
+      this.period = p;
+      await Promise.all([
+        this.loadStats(), this.loadEquityCurve(), this.loadDailyPL(),
+        this.loadSymbols(), this.loadDirection(), this.loadDistribution(),
+        this.loadDurationDist(), this.loadRolling(), this.loadMaeMfe(),
+      ]);
+      this.$nextTick(() => this.renderCharts());
+    },
+
+    async exportCSV() {
+      const qs = new URLSearchParams({
+        limit: 10000,
+        ...(this.histFilter.symbol    && { symbol: this.histFilter.symbol }),
+        ...(this.histFilter.direction && { direction: this.histFilter.direction }),
+      });
+      const token = localStorage.getItem('access_token');
+      window.open(`/api/v1/trades/export/${this.accountId}?${qs}&token=${token}`, '_blank');
+    },
+
+    resetHistFilter() {
+      this.histFilter = { symbol:'', direction:'', date_from:'', date_to:'', result:'' };
+      this.histPage = 1;
+      this.loadHistory();
+    },
+
+    histPageRange() {
+      const total = this.histTotalPages;
+      const cur   = this.histPage;
+      const pages = [];
+      const start = Math.max(1, cur - 2);
+      const end   = Math.min(total, start + 4);
+      for (let i = start; i <= end; i++) pages.push(i);
+      return pages;
+    },
+
+    // ── Charts ─────────────────────────────────────────────────────────────
+
+    renderCharts() {
+      this.renderEquityChart();
+      this.renderDailyPLChart();
+      this.renderDistChart();
+      this.renderDurChart();
+      this.renderDirChart();
+      this.renderRollingChart();
+      this.renderMaeMfeChart();
+      this.renderHourlyChart();
+    },
+
+    _destroyChart(id) {
+      if (this._charts[id]) { this._charts[id].destroy(); delete this._charts[id]; }
+    },
+
+    renderEquityChart() {
+      this._destroyChart('equity');
+      const el = document.getElementById('equityChart');
+      if (!el || !this.equityCurve.length) return;
+      const labels  = this.equityCurve.map(d => d.time || d.date || d.snapshot_time);
+      const equity  = this.equityCurve.map(d => d.equity);
+      const balance = this.equityCurve.map(d => d.balance);
+      this._charts.equity = new Chart(el, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Equity', data: equity, borderColor: '#00D4AA', borderWidth: 2,
+              backgroundColor: 'rgba(0,212,170,0.06)', fill: true,
+              pointRadius: 0, tension: 0.3,
+            },
+            {
+              label: 'Balance', data: balance, borderColor: 'rgba(59,130,246,0.7)', borderWidth: 1.5,
+              backgroundColor: 'transparent', fill: false,
+              pointRadius: 0, tension: 0.3, borderDash: [4,4],
+            },
+          ],
+        },
+        options: chartDefaults({ yPrefix: '$', legend: true }),
+      });
+    },
+
+    renderDailyPLChart() {
+      this._destroyChart('dailyPL');
+      const el = document.getElementById('dailyPLChart');
+      if (!el || !this.dailyPL.length) return;
+      const labels = this.dailyPL.map(d => d.date);
+      const values = this.dailyPL.map(d => d.profit || d.pl);
+      this._charts.dailyPL = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Daily P/L', data: values,
+            backgroundColor: values.map(v => v >= 0 ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)'),
+            borderWidth: 0, borderRadius: 3,
+          }],
+        },
+        options: chartDefaults({ yPrefix: '$' }),
+      });
+    },
+
+    renderDistChart() {
+      this._destroyChart('dist');
+      const el = document.getElementById('distChart');
+      if (!el || !this.distribution.length) return;
+      this._charts.dist = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: this.distribution.map(d => d.label || d.bucket),
+          datasets: [{
+            label: 'Trades', data: this.distribution.map(d => d.count),
+            backgroundColor: this.distribution.map(d =>
+              (d.label||d.bucket||'').startsWith('-') || (d.bucket_min||0) < 0
+                ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
+            borderWidth: 0, borderRadius: 3,
+          }],
+        },
+        options: chartDefaults({}),
+      });
+    },
+
+    renderDurChart() {
+      this._destroyChart('dur');
+      const el = document.getElementById('durChart');
+      if (!el || !this.durationDist.length) return;
+      this._charts.dur = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: this.durationDist.map(d => d.label || d.bucket),
+          datasets: [{
+            label: 'Trades', data: this.durationDist.map(d => d.count),
+            backgroundColor: 'rgba(59,130,246,0.7)',
+            borderWidth: 0, borderRadius: 3,
+          }],
+        },
+        options: chartDefaults({}),
+      });
+    },
+
+    renderDirChart() {
+      this._destroyChart('dir');
+      const el = document.getElementById('dirChart');
+      if (!el || !this.dirStats) return;
+      const buy  = this.dirStats.buy  || {};
+      const sell = this.dirStats.sell || {};
+      this._charts.dir = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: ['Net P/L', 'Gross Win', 'Gross Loss', 'Win Rate %'],
+          datasets: [
+            {
+              label: 'BUY', data: [buy.net_profit||0, buy.gross_profit||0, buy.gross_loss||0, buy.win_rate||0],
+              backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 3, borderWidth: 0,
+            },
+            {
+              label: 'SELL', data: [sell.net_profit||0, sell.gross_profit||0, sell.gross_loss||0, sell.win_rate||0],
+              backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 3, borderWidth: 0,
+            },
+          ],
+        },
+        options: chartDefaults({ legend: true }),
+      });
+    },
+
+    renderRollingChart() {
+      this._destroyChart('rolling');
+      const el = document.getElementById('rollingChart');
+      if (!el || !this.rollingData.length) return;
+      this._charts.rolling = new Chart(el, {
+        type: 'line',
+        data: {
+          labels: this.rollingData.map(d => d.date),
+          datasets: [{
+            label: 'Rolling Sharpe', data: this.rollingData.map(d => d.sharpe),
+            borderColor: '#8B5CF6', borderWidth: 2, backgroundColor: 'rgba(139,92,246,0.08)',
+            fill: true, pointRadius: 0, tension: 0.3,
+          }],
+        },
+        options: chartDefaults({}),
+      });
+    },
+
+    renderMaeMfeChart() {
+      this._destroyChart('maemfe');
+      const el = document.getElementById('maeMfeChart');
+      if (!el || !this.maeMfe.length) return;
+      this._charts.maemfe = new Chart(el, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Trades (MAE vs MFE)',
+            data: this.maeMfe.map(t => ({ x: Math.abs(t.mae||0), y: t.mfe||0 })),
+            backgroundColor: this.maeMfe.map(t => (t.net_profit||0) >= 0 ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)'),
+            pointRadius: 4, pointHoverRadius: 6,
+          }],
+        },
+        options: {
+          ...chartDefaults({ xPrefix: '$', yPrefix: '$' }),
+          scales: {
+            x: { title: { display: true, text: 'MAE ($)', color: '#606060' }, ...scaleDefaults() },
+            y: { title: { display: true, text: 'MFE ($)', color: '#606060' }, ...scaleDefaults() },
+          },
+        },
+      });
+    },
+
+    renderHourlyChart() {
+      this._destroyChart('hourly');
+      const el = document.getElementById('hourlyHeatmapChart');
+      if (!el || !this.hourlyData.length) return;
+      const hours  = this.hourlyData.map(h => h.hour + ':00');
+      const values = this.hourlyData.map(h => h.avg_profit || 0);
+      this._charts.hourly = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: hours,
+          datasets: [{
+            label: 'Avg P/L',
+            data: values,
+            backgroundColor: values.map(v => v >= 0 ? 'rgba(0,212,170,0.7)' : 'rgba(239,68,68,0.6)'),
+            borderWidth: 0, borderRadius: 2,
+          }],
+        },
+        options: chartDefaults({ yPrefix: '$' }),
+      });
+    },
+
+    // ── WebSocket ──────────────────────────────────────────────────────────
+
+    connectWS() {
+      if (!this.accountId) return;
+      wsManager.connectAccount(this.accountId, (data) => {
+        if (data.type === 'snapshot') {
+          this.stats = data.stats || this.stats;
+          if (data.open_positions) this.openPositions = data.open_positions;
+        }
+        if (data.type === 'position_update') {
+          const idx = this.openPositions.findIndex(p => p.ticket == data.ticket);
+          if (idx >= 0) Object.assign(this.openPositions[idx], data);
+        }
+      });
+    },
+
+    // ── WebSocket status ───────────────────────────────────────────────────
+
+    logout() {
+      api.post('/auth/logout', {}).catch(() => {});
+      localStorage.clear();
+      window.location.href = '/static/login.html';
+    },
+
+    // ── Heatmap color ──────────────────────────────────────────────────────
+
+    heatColor(pct) {
+      if (pct == null) return 'var(--bg-elevated)';
+      if (pct >= 5)  return 'rgba(34,197,94,0.9)';
+      if (pct >= 2)  return 'rgba(34,197,94,0.6)';
+      if (pct >= 0)  return 'rgba(34,197,94,0.3)';
+      if (pct >= -2) return 'rgba(239,68,68,0.3)';
+      if (pct >= -5) return 'rgba(239,68,68,0.6)';
+      return 'rgba(239,68,68,0.9)';
+    },
+
+    // ── Format helpers ─────────────────────────────────────────────────────
+
+    fmt(v, type) {
+      if (v == null || isNaN(v)) return '—';
+      switch(type) {
+        case 'currency': return '$' + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        case 'pl':       return (v>=0?'+$':'-$') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        case 'pct':      return (v>=0?'+':'') + v.toFixed(2) + '%';
+        case 'pct2':     return v.toFixed(2) + '%';
+        default:         return v.toString();
+      }
+    },
+
+    fmtDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    },
+
+    fmtDur(min) {
+      if (!min) return '—';
+      if (min < 60)   return Math.round(min) + 'm';
+      if (min < 1440) return (min/60).toFixed(1) + 'h';
+      return (min/1440).toFixed(1) + 'd';
+    },
+
+    colorCls(v) {
+      if (v == null) return '';
+      return v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+    },
+  }));
+
+  // ── Account Settings sub-component ────────────────────────────────────────
+  Alpine.data('accountSettings', () => ({
+    account:   null,
+    apiKey:    null,
+    form:      {},
+    deposits:  [],
+    showDepositForm: false,
+    depositForm: { amount: '', note: '', tx_date: new Date().toISOString().slice(0,10), type: 'deposit' },
+
+    async init() {
+      const params    = new URLSearchParams(window.location.search);
+      const accountId = params.get('id');
+      if (!accountId) return;
+      this._accountId = accountId;
+
+      this.account = await api.get(`/accounts/${accountId}`);
+      this.form = {
+        label:                this.account.label || '',
+        broker_name:          this.account.broker_name || '',
+        heartbeat_timeout_sec: this.account.heartbeat_timeout_sec || 60,
+        push_interval_sec:    this.account.push_interval_sec || 5,
+      };
+      this.deposits = await api.get(`/accounts/${accountId}/deposits`);
+    },
+
+    async saveSettings() {
+      try {
+        await api.patch(`/accounts/${this._accountId}`, this.form);
+        toast.success('Settings saved');
+      } catch(e) {
+        toast.error('Save failed: ' + e.message);
+      }
+    },
+
+    async generateApiKey() {
+      if (!confirm('Generate a new API key? This will invalidate the existing key.')) return;
+      const data = await api.post(`/accounts/${this._accountId}/api-key`, {});
+      this.apiKey = data.api_key;
+      toast.show('New API key generated — copy it now!', 'warning', 0);
+    },
+
+    async revokeApiKey() {
+      if (!confirm('Revoke API key? EA will stop pushing data.')) return;
+      await api.delete(`/accounts/${this._accountId}/api-key`);
+      this.apiKey = null;
+      toast.info('API key revoked');
+    },
+
+    async addDeposit() {
+      const amount = parseFloat(this.depositForm.amount);
+      if (!amount) return;
+      await api.post(`/accounts/${this._accountId}/deposits`, {
+        amount:  this.depositForm.type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        note:    this.depositForm.note,
+        tx_date: this.depositForm.tx_date,
+      });
+      this.deposits = await api.get(`/accounts/${this._accountId}/deposits`);
+      this.showDepositForm = false;
+      toast.success('Transaction saved');
+    },
+
+    copyToClipboard(text) {
+      if (!text) return;
+      navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    },
+
+    // Helpers
+    fmt(v, type) {
+      if (v == null) return '—';
+      switch(type) {
+        case 'pl': return (v>=0?'+$':'-$') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        default:   return v.toString();
+      }
+    },
+    fmtDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+    },
+    colorCls(v) { return v > 0 ? 'positive' : v < 0 ? 'negative' : ''; },
+  }));
+
+}); // alpine:init
+
+
+// ── Chart.js shared defaults ──────────────────────────────────────────────────
+function scaleDefaults() {
+  return {
+    grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+    ticks: { color: '#606060', font: { size: 10, family: 'IBM Plex Mono' } },
+  };
+}
+
+function chartDefaults({ yPrefix = '', xPrefix = '', legend = false } = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: {
+      legend: {
+        display: legend,
+        labels: { color: '#A0A0A0', boxWidth: 12, font: { size: 11 } },
+      },
+      tooltip: {
+        backgroundColor: '#1C1C1C',
+        borderColor: '#2A2A2A',
+        borderWidth: 1,
+        titleColor: '#F0F0F0',
+        bodyColor: '#A0A0A0',
+        padding: 10,
+        callbacks: {
+          label: ctx => {
+            const v = ctx.parsed.y ?? ctx.parsed;
+            if (typeof v === 'number') return ` ${yPrefix}${v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+            return v;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        ...scaleDefaults(),
+        ticks: {
+          ...scaleDefaults().ticks,
+          maxTicksLimit: 8,
+          maxRotation: 0,
+        },
+      },
+      y: {
+        ...scaleDefaults(),
+        ticks: {
+          ...scaleDefaults().ticks,
+          callback: v => yPrefix + (Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+'k' : v),
+        },
+      },
+    },
+  };
+}
+</script>
+
+</body>
+</html>
